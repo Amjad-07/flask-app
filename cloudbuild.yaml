@@ -1,30 +1,66 @@
 options:
   logging: CLOUD_LOGGING_ONLY
 
+substitutions:
+  _REGION: us-central1
+  _ZONE: us-central1-c
+  _REPO: my-repo
+  _IMAGE: flask-app
+  _PROJECT_ID: genuine-flight-462611-t5
+  _MIG_NAME: my-mig
+  _STARTUP_SCRIPT: |
+    #!/bin/bash
+    apt update
+    apt install -y docker.io
+    systemctl start docker
+    systemctl enable docker
+    gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
+    docker pull us-central1-docker.pkg.dev/genuine-flight-462611-t5/my-repo/flask-app:latest
+    docker stop flask-app || true
+    docker rm flask-app || true
+    docker run -d --name flask-app -p 8080:8080 us-central1-docker.pkg.dev/genuine-flight-462611-t5/my-repo/flask-app:latest
+
 steps:
-  # Step 1: Build Docker image
-  - name: 'gcr.io/cloud-builders/docker'
-    args: [
+# 1. Build Docker image
+- name: 'gcr.io/cloud-builders/docker'
+  args:
+    [
       'build',
-      '-t', 'us-central1-docker.pkg.dev/genuine-flight-462611-t5/my-repo/flask-app:latest',
+      '-t',
+      'us-central1-docker.pkg.dev/${_PROJECT_ID}/${_REPO}/${_IMAGE}:latest',
       '.'
     ]
 
-  # Step 2: Push Docker image to Artifact Registry
-  - name: 'gcr.io/cloud-builders/docker'
-    args: [
+# 2. Push Docker image
+- name: 'gcr.io/cloud-builders/docker'
+  args:
+    [
       'push',
-      'us-central1-docker.pkg.dev/genuine-flight-462611-t5/my-repo/flask-app:latest'
+      'us-central1-docker.pkg.dev/${_PROJECT_ID}/${_REPO}/${_IMAGE}:latest'
     ]
 
-  # Step 3: Restart MIG so startup script runs and pulls the new image
-  - name: 'gcr.io/cloud-builders/gcloud'
-    args: [
-      'compute',
-      'instance-groups',
-      'managed',
-      'rolling-action',
-      'restart',
-      'my-mig',
-      '--zone=us-central1-c'
+# 3. Create instance template with updated startup script
+- name: 'gcr.io/cloud-builders/gcloud'
+  id: create-instance-template
+  args:
+    [
+      'compute', 'instance-templates', 'create', 'instance-template-$(date +%s)',
+      '--region=${_REGION}',
+      '--machine-type=e2-medium',
+      '--network=default',
+      '--tags=http-server',
+      '--metadata=startup-script=${_STARTUP_SCRIPT}',
+      '--image-family=debian-11',
+      '--image-project=debian-cloud'
+    ]
+
+# 4. Trigger rolling update in MIG
+- name: 'gcr.io/cloud-builders/gcloud'
+  args:
+    [
+      'compute', 'instance-groups', 'managed', 'rolling-action', 'start-update', '${_MIG_NAME}',
+      '--zone=${_ZONE}',
+      '--version=template=$(gcloud compute instance-templates list --sort-by=~creationTimestamp --limit=1 --format="value(name)")',
+      '--max-unavailable=0',
+      '--max-surge=1'
     ]
