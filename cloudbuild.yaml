@@ -2,6 +2,7 @@ options:
   logging: CLOUD_LOGGING_ONLY
 
 steps:
+  # Step 1: Build Docker image
   - name: 'gcr.io/cloud-builders/docker'
     args: [
       'build',
@@ -9,8 +10,21 @@ steps:
       '.'
     ]
 
+  # Step 2: Push Docker image to Artifact Registry
   - name: 'gcr.io/cloud-builders/docker'
     args: [
       'push',
       'us-central1-docker.pkg.dev/genuine-flight-462611-t5/my-repo/flask-app:latest'
+    ]
+
+  # Step 3: Restart MIG so startup script runs and pulls the new image
+  - name: 'gcr.io/cloud-builders/gcloud'
+    args: [
+      'compute',
+      'instance-groups',
+      'managed',
+      'rolling-action',
+      'restart',
+      'my-mig',
+      '--zone=us-central1-c'
     ]
