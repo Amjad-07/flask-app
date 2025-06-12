@@ -23,6 +23,6 @@ steps:
       'rolling-action',
       'start-update',
       'my-mig',
-      '--version=template=my-instance-template',
+      '--version=template=https://compute.googleapis.com/compute/v1/projects/genuine-flight-462611-t5/regions/us-central1/instanceTemplates/my-instance-template',
       '--zone=us-central1-c'
     ]
