@@ -1,9 +1,9 @@
 steps:
   - name: 'gcr.io/cloud-builders/docker'
-    args: ['build', '-t', 'us-central1-docker.pkg.dev/$PROJECT_ID/my-repo/flask-app:latest', '.']
+    args: ['build', '-t', 'us-central1-docker.pkg.dev/genuine-flight-462611-t5/my-repo/flask-app:latest', '.']
 
   - name: 'gcr.io/cloud-builders/docker'
-    args: ['push', 'us-central1-docker.pkg.dev/$PROJECT_ID/my-repo/flask-app:latest']
+    args: ['push', 'us-central1-docker.pkg.dev/genuine-flight-462611-t5/my-repo/flask-app:latest']
 
   - name: 'gcr.io/cloud-builders/gcloud'
     args:
