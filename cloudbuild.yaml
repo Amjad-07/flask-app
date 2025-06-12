@@ -8,8 +8,7 @@ substitutions:
   _IMAGE: flask-app
   _PROJECT_ID: genuine-flight-462611-t5
   _MIG_NAME: my-mig
-  _INSTANCE_TEMPLATE_NAME: instance-template-${BUILD_ID}
-
+  _INSTANCE_TEMPLATE_NAME: instance-template-${BUILD_ID}  # Unique template name per build
   _STARTUP_SCRIPT: |
     #!/bin/bash
     apt update
@@ -23,7 +22,7 @@ substitutions:
     docker run -d --name flask-app -p 8080:8080 us-central1-docker.pkg.dev/genuine-flight-462611-t5/my-repo/flask-app:latest
 
 steps:
-# Step 1: Build Docker image
+# 1. Build Docker image
 - name: 'gcr.io/cloud-builders/docker'
   args:
     [
@@ -33,7 +32,7 @@ steps:
       '.'
     ]
 
-# Step 2: Push Docker image
+# 2. Push Docker image
 - name: 'gcr.io/cloud-builders/docker'
   args:
     [
@@ -41,19 +40,28 @@ steps:
       'us-central1-docker.pkg.dev/${_PROJECT_ID}/${_REPO}/${_IMAGE}:latest'
     ]
 
-# Step 3: Create firewall rule for port 8080 if not exists
-- name: 'gcr.io/cloud-builders/gcloud'
-  entrypoint: 'bash'
-  args:
-    [
-      '-c',
-      'gcloud compute firewall-rules create allow-8080 --allow=tcp:8080 --target-tags=http-server --description="Allow port 8080" --network=default || true'
-    ]
-
-# Step 4: Create a new instance template
+# 3. Create new instance template
 - name: 'gcr.io/cloud-builders/gcloud'
   id: create-instance-template
   args:
     [
       'compute', 'instance-templates', 'create', '${_INSTANCE_TEMPLATE_NAME}',
-      '--
+      '--machine-type=e2-medium',
+      '--region=${_REGION}',
+      '--network=default',
+      '--tags=http-server',
+      '--metadata=startup-script=${_STARTUP_SCRIPT}',
+      '--image-family=debian-11',
+      '--image-project=debian-cloud'
+    ]
+
+# 4. Trigger rolling update using new template
+- name: 'gcr.io/cloud-builders/gcloud'
+  args:
+    [
+      'compute', 'instance-groups', 'managed', 'rolling-action', 'start-update', '${_MIG_NAME}',
+      '--zone=${_ZONE}',
+      '--version=template=${_INSTANCE_TEMPLATE_NAME}',
+      '--max-unavailable=1',
+      '--max-surge=1'
+    ]
