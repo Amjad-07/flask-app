@@ -4,22 +4,20 @@ options:
 steps:
   # Step 1: Build Docker image
   - name: 'gcr.io/cloud-builders/docker'
-    args:
-      [
-        'build',
-        '-t', 'us-central1-docker.pkg.dev/genuine-flight-462611-t5/my-repo/flask-app:latest',
-        '.'
-      ]
+    args: [
+      'build',
+      '-t', 'us-central1-docker.pkg.dev/genuine-flight-462611-t5/my-repo/flask-app:latest',
+      '.'
+    ]
 
-  # Step 2: Push Docker image
+  # Step 2: Push Docker image to Artifact Registry
   - name: 'gcr.io/cloud-builders/docker'
-    args:
-      [
-        'push',
-        'us-central1-docker.pkg.dev/genuine-flight-462611-t5/my-repo/flask-app:latest'
-      ]
+    args: [
+      'push',
+      'us-central1-docker.pkg.dev/genuine-flight-462611-t5/my-repo/flask-app:latest'
+    ]
 
-  # Step 3: Create a new instance template with timestamp to force MIG update
+  # Step 3: Create instance template with a timestamp to force update (timestamp is created inline)
   - name: 'gcr.io/cloud-builders/gcloud'
     entrypoint: 'bash'
     args:
@@ -30,18 +28,18 @@ steps:
           --machine-type=e2-medium \
           --image-family=debian-11 \
           --image-project=debian-cloud \
-          --metadata-from-file=startup-script=startup.sh \
           --boot-disk-size=10GB \
           --boot-disk-type=pd-balanced \
+          --metadata-from-file=startup-script=startup.sh \
           --tags=http-server
 
-  # Step 4: Start rolling update of MIG
+  # Step 4: Rolling update MIG with new template
   - name: 'gcr.io/cloud-builders/gcloud'
     entrypoint: 'bash'
     args:
       - -c
       - |
-        TIMESTAMP=$(date +%s)
+        LATEST_TEMPLATE=$(gcloud compute instance-templates list --sort-by=~creationTimestamp --limit=1 --format="value(name)")
         gcloud compute instance-groups managed rolling-action start-update my-mig \
-          --version=template=global/instanceTemplates/instance-template-$TIMESTAMP \
+          --version=template=https://www.googleapis.com/compute/v1/projects/genuine-flight-462611-t5/global/instanceTemplates/$LATEST_TEMPLATE \
           --zone=us-central1-c
