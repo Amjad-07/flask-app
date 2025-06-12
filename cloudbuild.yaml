@@ -1,40 +1,58 @@
 options:
   logging: CLOUD_LOGGING_ONLY
 
-substitutions:
-  _SUFFIX: 'v${SHORT_SHA}'
-
 steps:
+  # Step 1: Build Docker image
   - name: 'gcr.io/cloud-builders/docker'
-    args: ['build', '-t', 'us-central1-docker.pkg.dev/genuine-flight-462611-t5/my-repo/flask-app:latest', '.']
+    args: [
+      'build',
+      '-t', 'us-central1-docker.pkg.dev/genuine-flight-462611-t5/my-repo/flask-app:latest',
+      '.'
+    ]
 
+  # Step 2: Push Docker image to Artifact Registry
   - name: 'gcr.io/cloud-builders/docker'
-    args: ['push', 'us-central1-docker.pkg.dev/genuine-flight-462611-t5/my-repo/flask-app:latest']
+    args: [
+      'push',
+      'us-central1-docker.pkg.dev/genuine-flight-462611-t5/my-repo/flask-app:latest'
+    ]
 
+  # Step 3: Create a global instance template with a unique name
   - name: 'gcr.io/cloud-builders/gcloud'
     id: create-instance-template
+    entrypoint: bash
     args:
-      - compute
-      - instance-templates
-      - create
-      - 'instance-template-${_SUFFIX}'
-      - '--region=us-central1'
-      - '--machine-type=e2-medium'
-      - '--network=default'
-      - '--subnet=default'
-      - '--tags=http-server'
-      - '--image-family=debian-11'
-      - '--image-project=debian-cloud'
-      - '--metadata=startup-script-url=gs://your-bucket/startup-script.sh'
+      - "-c"
+      - |
+        TIMESTAMP=$(date +%s)
+        TEMPLATE_NAME=instance-template-$TIMESTAMP
+        gcloud compute instance-templates create $TEMPLATE_NAME \
+          --machine-type=e2-medium \
+          --image-family=debian-11 \
+          --image-project=debian-cloud \
+          --metadata=startup-script='#!/bin/bash
+          apt update
+          apt install -y docker.io
+          systemctl start docker
+          systemctl enable docker
+          gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
+          docker pull us-central1-docker.pkg.dev/genuine-flight-462611-t5/my-repo/flask-app:latest
+          docker stop flask-app || true
+          docker rm flask-app || true
+          docker run -d --name flask-app -p 8080:8080 us-central1-docker.pkg.dev/genuine-flight-462611-t5/my-repo/flask-app:latest' \
+          --tags=http-server \
+          --boot-disk-size=10GB
 
+        echo "template_name=$TEMPLATE_NAME" > template_name.txt
+
+  # Step 4: Rolling update using the created global instance template
   - name: 'gcr.io/cloud-builders/gcloud'
     id: rolling-update
+    entrypoint: bash
     args:
-      - compute
-      - instance-groups
-      - managed
-      - rolling-action
-      - start-update
-      - 'my-mig'
-      - '--version=template=projects/genuine-flight-462611-t5/regions/us-central1/instanceTemplates/instance-template-${_SUFFIX}'
-      - '--zone=us-central1-c'
+      - "-c"
+      - |
+        TEMPLATE_NAME=$(cat template_name.txt | cut -d'=' -f2)
+        gcloud compute instance-groups managed rolling-action start-update my-mig \
+          --version=template=https://compute.googleapis.com/compute/v1/projects/genuine-flight-462611-t5/global/instanceTemplates/$TEMPLATE_NAME \
+          --zone=us-central1-c
