@@ -41,18 +41,14 @@ steps:
       'us-central1-docker.pkg.dev/${_PROJECT_ID}/${_REPO}/${_IMAGE}:latest'
     ]
 
-# Step 3: Ensure firewall allows port 8080
+# Step 3: Create firewall rule for port 8080 if not exists
 - name: 'gcr.io/cloud-builders/gcloud'
+  entrypoint: 'bash'
   args:
     [
-      'compute', 'firewall-rules', 'create', 'allow-8080',
-      '--allow=tcp:8080',
-      '--target-tags=http-server',
-      '--description=Allow port 8080',
-      '--network=default'
+      '-c',
+      'gcloud compute firewall-rules create allow-8080 --allow=tcp:8080 --target-tags=http-server --description="Allow port 8080" --network=default || true'
     ]
-  # Avoid failure if rule already exists
-  ignoreExitStatus: true
 
 # Step 4: Create a new instance template
 - name: 'gcr.io/cloud-builders/gcloud'
@@ -60,22 +56,4 @@ steps:
   args:
     [
       'compute', 'instance-templates', 'create', '${_INSTANCE_TEMPLATE_NAME}',
-      '--machine-type=e2-medium',
-      '--region=${_REGION}',
-      '--network=default',
-      '--tags=http-server',
-      '--metadata=startup-script=${_STARTUP_SCRIPT}',
-      '--image-family=debian-11',
-      '--image-project=debian-cloud'
-    ]
-
-# Step 5: Trigger rolling update in MIG
-- name: 'gcr.io/cloud-builders/gcloud'
-  args:
-    [
-      'compute', 'instance-groups', 'managed', 'rolling-action', 'start-update', '${_MIG_NAME}',
-      '--zone=${_ZONE}',
-      '--version=template=${_INSTANCE_TEMPLATE_NAME}',
-      '--max-unavailable=1',
-      '--max-surge=1'
-    ]
+      '--
