@@ -16,7 +16,7 @@ steps:
       - 'push'
       - 'us-central1-docker.pkg.dev/genuine-flight-462611-t5/my-repo/flask-app:latest'
 
-  # Step 3: Create new instance template with inline startup script
+  # Step 3: Create new instance template with startup script
   - name: 'gcr.io/cloud-builders/gcloud'
     entrypoint: bash
     args:
@@ -32,7 +32,7 @@ steps:
           --boot-disk-size=10GB \
           --boot-disk-type=pd-balanced \
           --tags=http-server \
-          --metadata=startup-script='#!/bin/bash
+          --metadata=startup-script="#!/bin/bash
 apt update
 apt install -y docker.io
 systemctl start docker
@@ -41,10 +41,10 @@ gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
 docker pull us-central1-docker.pkg.dev/genuine-flight-462611-t5/my-repo/flask-app:latest
 docker stop flask-app || true
 docker rm flask-app || true
-docker run -d --name flask-app -p 8080:8080 us-central1-docker.pkg.dev/genuine-flight-462611-t5/my-repo/flask-app:latest' \
+docker run -d --name flask-app -p 8080:8080 us-central1-docker.pkg.dev/genuine-flight-462611-t5/my-repo/flask-app:latest" \
         && echo "$TEMPLATE_NAME" > /workspace/template-name.txt
 
-  # Step 4: Rolling update MIG
+  # Step 4: Update MIG to use new template
   - name: 'gcr.io/cloud-builders/gcloud'
     entrypoint: bash
     args:
