@@ -10,22 +10,21 @@ steps:
       '.'
     ]
 
-  # Step 2: Push Docker image to Artifact Registry
+  # Step 2: Push Docker image
   - name: 'gcr.io/cloud-builders/docker'
     args: [
       'push',
       'us-central1-docker.pkg.dev/genuine-flight-462611-t5/my-repo/flask-app:latest'
     ]
 
-  # Step 3: Create a global instance template with a unique name
+  # Step 3: Create a new instance template with timestamp
   - name: 'gcr.io/cloud-builders/gcloud'
-    id: create-instance-template
     entrypoint: bash
     args:
       - "-c"
       - |
         TIMESTAMP=$(date +%s)
-        TEMPLATE_NAME=instance-template-$TIMESTAMP
+        TEMPLATE_NAME="instance-template-${TIMESTAMP}"
         gcloud compute instance-templates create $TEMPLATE_NAME \
           --machine-type=e2-medium \
           --image-family=debian-11 \
@@ -43,16 +42,15 @@ steps:
           --tags=http-server \
           --boot-disk-size=10GB
 
-        echo "template_name=$TEMPLATE_NAME" > template_name.txt
+        echo $TEMPLATE_NAME > /workspace/template_name.txt
 
-  # Step 4: Rolling update using the created global instance template
+  # Step 4: Rolling update the MIG with new template
   - name: 'gcr.io/cloud-builders/gcloud'
-    id: rolling-update
     entrypoint: bash
     args:
       - "-c"
       - |
-        TEMPLATE_NAME=$(cat template_name.txt | cut -d'=' -f2)
+        TEMPLATE_NAME=$(cat /workspace/template_name.txt)
         gcloud compute instance-groups managed rolling-action start-update my-mig \
           --version=template=https://compute.googleapis.com/compute/v1/projects/genuine-flight-462611-t5/global/instanceTemplates/$TEMPLATE_NAME \
           --zone=us-central1-c
