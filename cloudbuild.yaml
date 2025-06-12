@@ -8,7 +8,7 @@ substitutions:
   _IMAGE: flask-app
   _PROJECT_ID: genuine-flight-462611-t5
   _MIG_NAME: my-mig
-  _INSTANCE_TEMPLATE_NAME: instance-template-v1  # Change the version manually or use a unique one each time
+  _INSTANCE_TEMPLATE_NAME: instance-template-${BUILD_ID}  # Unique template name per build
   _STARTUP_SCRIPT: |
     #!/bin/bash
     apt update
@@ -40,14 +40,14 @@ steps:
       'us-central1-docker.pkg.dev/${_PROJECT_ID}/${_REPO}/${_IMAGE}:latest'
     ]
 
-# 3. Create instance template with updated startup script
+# 3. Create new instance template
 - name: 'gcr.io/cloud-builders/gcloud'
   id: create-instance-template
   args:
     [
       'compute', 'instance-templates', 'create', '${_INSTANCE_TEMPLATE_NAME}',
-      '--region=${_REGION}',
       '--machine-type=e2-medium',
+      '--region=${_REGION}',
       '--network=default',
       '--tags=http-server',
       '--metadata=startup-script=${_STARTUP_SCRIPT}',
@@ -55,13 +55,13 @@ steps:
       '--image-project=debian-cloud'
     ]
 
-# 4. Trigger rolling update in MIG
+# 4. Trigger rolling update using new template
 - name: 'gcr.io/cloud-builders/gcloud'
   args:
     [
       'compute', 'instance-groups', 'managed', 'rolling-action', 'start-update', '${_MIG_NAME}',
       '--zone=${_ZONE}',
       '--version=template=${_INSTANCE_TEMPLATE_NAME}',
-      '--max-unavailable=0',
+      '--max-unavailable=1',
       '--max-surge=1'
     ]
